@@ -1,6 +1,16 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt-nodejs');
+const knex = require('knex')({
+    client: 'pg',
+    connection: {
+        host : '127.0.0.1',
+        user : 'Cifer',
+        password : '',
+        database : 'smartbrain'
+    }
+});
+
 const cors = require('cors');
 
 const app = express();
@@ -27,58 +37,51 @@ const database = {
       joined: new Date(),
     },
   ]
-}
+};
 
 app.get('/', (req, res) => {
-  res.json(database.users)
-})
+  knex.select('*').from('users').then(users => res.json(users))
+});
 
 app.get('/users/:id', (req, res) => {
-  const u = database.users.filter((user) => user.id === req.params.id)[0]
-  u ? res.json(u) : res.status(404).json("Record not found")
-})
+  knex('users').where('id', req.params.id).then(user => {
+    res.json(user[0])
+  }).catch(err => {
+    res.status(404).json("Record not found")
+  })
+});
 
 app.post('/users/:id/image', (req, res) => {
-  const u = database.users.filter((user) => user.id === req.params.id)[0]
-  if(u) {
-    u.entries++
-    res.json(u)
-  } else {
-    res.status(404).json("Record not found")
-  }
-})
+  knex('users').where('id', req.params.id).returning('*').increment('entries', 1).then((user) => {
+    res.json(user[0])
+  }).catch(err => {
+    res.status(400).json("Update Error")
+  })
+});
 
 app.post('/signin', (req, res) => {
   const {email, password} = req.body;
-  const u = database.users.filter((user) => user.email === email)[0]
-
-  if (u) {
-    bcrypt.compare(password, u.password, function(err, result) {
-      result ? res.json(u) : res.status(401).json('Email or Password invalid')
-    });
-  } else {
-    res.status(401).json('Email or Password invalid')
-  }
-})
+  knex('users').where('email', email).then(user => {
+    res.json(user[0])
+  }).catch(() => {
+    res.status(400).json('email or password invalid')
+  })
+});
 
 app.post('/register', (req, res) => {
   const {name, email, password} = req.body;
-  bcrypt.hash(password, null, null, function(err, hash) {
-    database.users.push({
-      id: '125',
+  knex('users').returning('*')
+    .insert({
       name: name,
       email: email,
-      password: hash,
-      entries: 0,
-      joined: new Date(),
+      joined: new Date()
     })
-
-    const u = database.users.filter((user) => user.email === email)[0]
-    res.json(u);
-  });
-
-
-})
+    .then(user => res.json(user[0]))
+    .catch(err => {
+      res.status(400).json('error for register');
+    })
+  // bcrypt.hash(password, null, null, function(err, hash) {});
+});
 
 app.listen(3003, () => {
   console.log("App is running: http://127.0.0.1:3003")
